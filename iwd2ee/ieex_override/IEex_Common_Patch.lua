@@ -33,6 +33,8 @@
 			{["address"] = IEex_InitialMemory, ["size"] = 0x1000, ["reserved"] = false}
 		})
 
+		IEex_Helper_InformThreadWatcherOfDynamicMemory(IEex_InitialMemory, 0x1000)
+
 		-- Fetch the matched pattern addresses from the loader.
 		-- (Thanks @mrfearless!): https://github.com/mrfearless/IEexLoader
 		IEex_GlobalAssemblyLabels = IEex_AddressList()

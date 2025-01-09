@@ -10,10 +10,11 @@ IEex_OnceTable = {}
 IEex_GlobalAssemblyLabels = {}
 IEex_GlobalAssemblyMacros = {}
 IEex_CodePageAllocations = {}
+IEex_PendingDynamicAllocationInforms = {}
 
----------------------
--- Memory Utililty --
----------------------
+--------------------
+-- Memory Utility --
+--------------------
 
 function IEex_Malloc(size)
 	return IEex_Call(IEex_Label("_malloc"), {size}, nil, 0x4)
@@ -928,7 +929,7 @@ Core function that writes assembly declarations into memory. args syntax =>
 
 	a) string:
 
-		Every byte / operation MUST be seperated by some kind of whitespace. Syntax:
+		Every byte / operation MUST be separated by some kind of whitespace. Syntax:
 
 		number  = Writes hex number as byte.
 		:number = Writes relative offset to hex number. Depreciated; please use label operations instead.
@@ -1437,9 +1438,8 @@ function IEex_CalcLabelAddress(state, toFind)
 	end
 end
 
--- NOTE: Same as IEex_WriteAssembly(), but writes to a dynamically
--- allocated memory space instead of a provided address.
--- Very useful for writing new executable code into memory.
+-- NOTE: Same as IEex_WriteAssembly(), but writes to a dynamically allocated memory space instead of a provided address.
+-- Useful for writing new executable code into memory.
 function IEex_WriteAssemblyAuto(assembly, bLog)
 	local state = IEex_SanitizeAssembly(assembly)
 	local reservedAddress, reservedLength = IEex_ReserveCodeMemory(state)
@@ -2468,9 +2468,8 @@ function IEex_VirtualAlloc(dwSize, flProtect)
 	return IEex_DllCall("Kernel32", "VirtualAlloc", {flProtect, IEex_Flags({0x1000, 0x2000}), dwSize, 0x0}, nil, 0x0)
 end
 
--- NOTE: Please don't call this directly. This is used internally
--- by IEex_ReserveCodeMemory() to allocate additional code pages
--- when needed. If you ignore this message, god help you.
+-- NOTE: Don't call this directly.
+-- Used internally by IEex_ReserveCodeMemory() to allocate additional codepages when needed.
 function IEex_AllocCodePage(size)
 	local allocGran = IEex_GetAllocGran()
 	size = IEex_RoundUp(size, allocGran)
@@ -2481,15 +2480,15 @@ function IEex_AllocCodePage(size)
 	initialEntry.reserved = false
 	local codePageEntry = {initialEntry}
 	table.insert(IEex_CodePageAllocations, codePageEntry)
+	IEex_Helper_InformThreadWatcherOfDynamicMemory(address, size)
 	return codePageEntry
 end
 
--- NOTE: Dynamically allocates and reserves executable memory for
--- new code. No reason to use instead of IEex_WriteAssemblyAuto,
--- unless you want to reserve memory for later use.
--- Supports filling holes caused by freeing code reservations,
--- (if you would ever want to do that?...), though freeing is not
--- currently implemented.
+-- NOTE: Dynamically allocates and reserves executable memory for new code.
+-- No reason to use instead of IEex_WriteAssemblyAuto, unless you want to
+-- reserve memory for later use. Supports filling holes caused by freeing
+-- code reservations, (if you would ever want to do that?...), though freeing
+-- is not currently implemented.
 function IEex_ReserveCodeMemory(state)
 	local reservedAddress = -1
 	local writeLength = -1
@@ -2542,10 +2541,8 @@ function IEex_ReserveCodeMemory(state)
 		local newCodePage = IEex_AllocCodePage(1)
 		if not processCodePageEntry(newCodePage) then
 			IEex_Error("***FATAL*** I CAN ONLY ALLOCATE UP TO ALLOCGRAN ***FATAL*** \z
-				Tell Bubb he should at least guess at how big the write needs to be, \z
-				overestimating where required, instead of crashing like an idiot. \z
-				(Though, I must ask, how in the world are you writing a function that is \z
-				longer than 65536 bytes?!)")
+				Tell Bubb he should guess how big the write needs to be, \z
+				overestimating where required, instead of crashing.")
 		end
 	end
 	return reservedAddress, writeLength
@@ -2556,10 +2553,8 @@ end
 -------------------------
 
 -- OS:WINDOWS
--- Don't use this unless
--- you REALLY know what you are doing.
--- Enables writing to the .text section of the
--- exe (code).
+-- Don't use this unless you REALLY know what you are doing.
+-- Enables writing to the .text section of the exe (code).
 function IEex_DisableCodeProtection()
 	local temp = IEex_Malloc(0x4)
 	-- 0x40 = PAGE_EXECUTE_READWRITE
@@ -2570,11 +2565,7 @@ function IEex_DisableCodeProtection()
 end
 
 -- OS:WINDOWS
--- If you were crazy enough to use
--- IEex_DisableCodeProtection(), please
--- use this to reverse your bad decisions.
--- Reverts the .text section protections back
--- to default.
+-- Reverts the .text section protections back to default.
 function IEex_EnableCodeProtection()
 	local temp = IEex_Malloc(0x4)
 	-- 0x20 = PAGE_EXECUTE_READ
@@ -2600,6 +2591,11 @@ function IEex_EnableRDataProtection()
 	-- 0x5E000 = Size of .rdata section in memory.
 	IEex_DllCall("Kernel32", "VirtualProtect", {temp, 0x20, 0x5E000, 0x847000}, nil, 0x0)
 	IEex_Free(temp)
+end
+
+-- Stub that queues the dynamic allocation inform actions from before IEexHelper is initialized
+function IEex_Helper_InformThreadWatcherOfDynamicMemory(base, size)
+	table.insert(IEex_PendingDynamicAllocationInforms, {base, size})
 end
 
 -- Assembly Macros

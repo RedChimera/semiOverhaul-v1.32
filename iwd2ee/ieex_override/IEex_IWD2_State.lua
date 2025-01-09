@@ -1,9 +1,12 @@
+
 --------------------
 -- /START Options --
 --------------------
+
 -- This option disables most of IWD2:EE's functionality / engine patches, only leaving the widescreen and FPS uncap code
 -- enabled, as well as some very minor convenience patches. This is intended for debugging the vanilla game with IEex.
 IEex_Vanilla = false
+
 ------------------
 -- /END Options --
 ------------------
@@ -84,9 +87,6 @@ dofile("override/IEex_StartupFixes_State.lua")
 dofile("override/IEex_Dev_State.lua")
 dofile("override/IEex_FakeInputRoutine.lua")
 dofile("override/IEex_UncapFPS.lua")
-
-
-
 
 if not IEex_Vanilla then
 	for module, tf in pairs(IEex_Modules) do
@@ -1209,13 +1209,13 @@ function IEex_IterateActorEffects(actorID, func)
 
 	if not IEex_IsSprite(actorID, true) then return end
 	local sprite = IEex_GetActorShare(actorID)
-	
+
 	-- Equipped List
 	local equippedList = sprite + 0x5526
 	IEex_IterateCPtrListNode(equippedList, function(effect, node)
 		func(effect - 0x4, equippedList, node)
 	end)
-	
+
 	-- Timed List
 	local timedList = sprite + 0x54FA
 	IEex_IterateCPtrListNode(timedList, function(effect, node)
