@@ -17,7 +17,7 @@ function IEex_Extern_AfterDirectDrawCreate()
 end
 
 function IEex_IsCncDDrawPresent()
-	return IEex_GetModuleProcAddress(IEex_Helper_FindLoadedModule("ddraw.dll"), "GameHandlesClose") ~= 0x0
+	return IEex_GetProcAddressInternal(IEex_Helper_FindLoadedModule("ddraw.dll"), "GameHandlesClose") ~= 0x0
 end
 
 function IEex_IsCncDDrawWindowed()

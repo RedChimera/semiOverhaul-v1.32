@@ -7,7 +7,7 @@ IEex_MinimalStartup = false
 IEex_InitialMemory = nil
 
 IEex_OnceTable = {}
-IEex_GlobalAssemblyLabels = {}
+IEex_GlobalAssemblyLabels = IEex_GetPatternMap()
 IEex_GlobalAssemblyMacros = {}
 IEex_CodePageAllocations = {}
 IEex_PendingDynamicAllocationInforms = {}
@@ -16,98 +16,39 @@ IEex_PendingDynamicAllocationInforms = {}
 -- Memory Utility --
 --------------------
 
-function IEex_Malloc(size)
-	return IEex_Call(IEex_Label("_malloc"), {size}, nil, 0x4)
-end
-
-function IEex_Free(address)
-	return IEex_Call(IEex_Label("_free"), {address}, nil, 0x4)
-end
-
-function IEex_ReadByte(address, index)
-	return bit.extract(IEex_ReadDword(address), (index or 0) * 0x8, 0x8)
-end
-
--- Reads a dword from the given address, extracting and returning the "index"th signed byte.
-function IEex_ReadSignedByte(address, index)
-	local readValue = bit.extract(IEex_ReadDword(address), (index or 0) * 0x8, 0x8)
-	-- TODO: Implement better conversion code.
-	if readValue >= 128 then
-		return -256 + readValue
+function IEex_WriteByte(address, value)
+	if value >= 0 then
+		IEex_WriteU8(address, value)
 	else
-		return readValue
-	end
-end
-
-function IEex_ReadWord(address, index)
-	return bit.extract(IEex_ReadDword(address), (index or 0) * 0x10, 0x10)
-end
-
--- Reads a signed 2-byte word at the given address, shifted over by 2*index bytes.
-function IEex_ReadSignedWord(address, index)
-	local readValue = bit.extract(IEex_ReadDword(address), (index or 0) * 0x10, 0x10)
-	-- TODO: This is definitely not the right way to do the conversion,
-	-- but I have at least 32 bits to play around with; will do for now.
-	if readValue >= 32768 then
-		return -65536 + readValue
-	else
-		return readValue
+		IEex_Write8(address, value)
 	end
 end
 
 function IEex_WriteWord(address, value)
-	for i = 0, 1, 1 do
-		IEex_WriteByte(address + i, bit.extract(value, i * 0x8, 0x8))
+	if value >= 0 then
+		IEex_WriteU16(address, value)
+	else
+		IEex_Write16(address, value)
 	end
 end
 
 function IEex_WriteDword(address, value)
-	for i = 0, 3, 1 do
-		IEex_WriteByte(address + i, bit.extract(value, i * 0x8, 0x8))
+	if value >= 0 then
+		IEex_WriteU32(address, value)
+	else
+		IEex_Write32(address, value)
 	end
-end
-
-function IEex_WriteStringAuto(string)
-	local address = IEex_Malloc(#string + 1)
-	IEex_WriteString(address, string)
-	return address
 end
 
 -- OS:WINDOWS
 function IEex_GetProcAddress(dll, proc)
-	local procaddress = #dll + 1
-	local dlladdress = IEex_Malloc(procaddress + #proc + 1)
-	procaddress = dlladdress + procaddress
-	IEex_WriteString(dlladdress, dll)
-	IEex_WriteString(procaddress, proc)
-	local dllhandle = IEex_Call(IEex_Label("__imp__LoadLibraryA"), {dlladdress}, nil, 0x0)
-	local procfunc = IEex_Call(IEex_Label("__imp__GetProcAddress"), {procaddress, dllhandle}, nil, 0x0)
-	IEex_Free(dlladdress)
-	return procfunc
+	return IEex_GetProcAddressInternal(IEex_LoadLibrary(dll), proc)
 end
 
 -- OS:WINDOWS
 function IEex_DllCall(dll, proc, args, ecx, pop)
-	local procaddress = #dll + 1
-	local dlladdress = IEex_Malloc(procaddress + #proc + 1)
-	procaddress = dlladdress + procaddress
-	IEex_WriteString(dlladdress, dll)
-	IEex_WriteString(procaddress, proc)
-	local dllhandle = IEex_Call(IEex_Label("__imp__LoadLibraryA"), {dlladdress}, nil, 0x0)
-	local procfunc = IEex_Call(IEex_Label("__imp__GetProcAddress"), {procaddress, dllhandle}, nil, 0x0)
-	local result = IEex_Call(procfunc, args, ecx, pop)
-	IEex_Free(dlladdress)
-	return result
-end
-
--- OS:WINDOWS
-function IEex_GetModuleProcAddress(module, proc)
-	local toReturn
-	IEex_RunWithStack(#proc + 1, function(esp)
-		IEex_WriteString(esp, proc)
-		toReturn = IEex_Call(IEex_Label("__imp__GetProcAddress"), {esp, module}, nil, 0x0)
-	end)
-	return toReturn
+	local proc =  IEex_GetProcAddress(dll, proc)
+	return IEex_Call(proc, args, ecx, pop)
 end
 
 -- OS:WINDOWS
@@ -353,13 +294,7 @@ end
 
 -- OS:WINDOWS
 function IEex_MessageBox(message, iconOverride)
-	local caption = "IEex"
-	local messageAddress = IEex_Malloc(#message + 1 + #caption + 1)
-	local captionAddress = messageAddress + #message + 1
-	IEex_WriteString(messageAddress, message)
-	IEex_WriteString(captionAddress, caption)
-	IEex_DllCall("User32", "MessageBoxA", {IEex_Flags({iconOverride or 0x40}), captionAddress, messageAddress, 0x0}, nil, 0x0)
-	IEex_Free(messageAddress)
+	IEex_MessageBoxInternal(message, iconOverride and iconOverride or 0x40)
 end
 
 --------------------
@@ -1534,7 +1469,7 @@ function IEex_HookRestore(address, restoreDelay, restoreSize, assembly)
 		local bytes = {}
 		local limit = startAddress + size - 1
 		for i = startAddress, limit, 1 do
-			table.insert(bytes, {IEex_ReadByte(i, 0), 1})
+			table.insert(bytes, {IEex_ReadByte(i), 1})
 		end
 		return bytes
 	end
@@ -1575,7 +1510,7 @@ function IEex_HookAfterRestore(address, restoreDelay, restoreSize, assembly)
 		local bytes = {}
 		local limit = startAddress + size - 1
 		for i = startAddress, limit, 1 do
-			table.insert(bytes, {IEex_ReadByte(i, 0), 1})
+			table.insert(bytes, {IEex_ReadByte(i), 1})
 		end
 		return bytes
 	end
@@ -1610,13 +1545,13 @@ end
 
 function IEex_AttemptHook(address, hookPart, attemptRestorePart, expectedBytes)
 
-	if IEex_ReadByte(address, 0) == 0xE9 then
+	if IEex_ReadByte(address) == 0xE9 then
 		local dest = address + 0x5 + IEex_ReadDword(address + 0x1)
 		attemptRestorePart = {"!jmp_dword", {dest, 4, 4}}
 	else
 		local checkAddress = address
 		for _, expectedByte in ipairs(expectedBytes) do
-			if IEex_ReadByte(checkAddress, 0) ~= expectedByte then
+			if IEex_ReadByte(checkAddress) ~= expectedByte then
 				print("[?] Unexpected byte during IEex_AttemptHook at "..IEex_ToHex(address).." ("..IEex_ToHex(checkAddress)..") - not tracing.")
 				return
 			end
@@ -1638,7 +1573,7 @@ function IEex_HookReplaceFunctionMaintainOriginal(address, restoreSize, original
 		local bytes = {}
 		local limit = startAddress + size - 1
 		for i = startAddress, limit, 1 do
-			table.insert(bytes, {IEex_ReadByte(i, 0), 1})
+			table.insert(bytes, {IEex_ReadByte(i), 1})
 		end
 		return bytes
 	end
@@ -1665,7 +1600,7 @@ function IEex_HookJump(address, restoreSize, assembly)
 		local bytes = {}
 		local limit = startAddress + size - 1
 		for i = startAddress, limit, 1 do
-			table.insert(bytes, {IEex_ReadByte(i, 0), 1})
+			table.insert(bytes, {IEex_ReadByte(i), 1})
 		end
 		return bytes
 	end
@@ -1690,7 +1625,7 @@ function IEex_HookJump(address, restoreSize, assembly)
 		[0xEB] = {{0xE9, 1}},
 	}
 
-	local instructionByte = IEex_ReadByte(address, 0)
+	local instructionByte = IEex_ReadByte(address)
 	local instructionBytes = {}
 	local instructionSize = nil
 	local offset = nil
@@ -1699,13 +1634,13 @@ function IEex_HookJump(address, restoreSize, assembly)
 	if switchBytes then
 		instructionBytes = switchBytes
 		instructionSize = 2
-		offset = IEex_ReadSignedByte(address + 1, 0)
+		offset = IEex_ReadSignedByte(address + 1)
 	elseif instructionByte == 0xE9 then
 		instructionBytes = {{instructionByte, 1}}
 		instructionSize = 5
 		offset = IEex_ReadDword(address + 1)
 	else
-		instructionBytes = {{instructionByte, 1}, {IEex_ReadByte(address + 1, 0), 1}}
+		instructionBytes = {{instructionByte, 1}, {IEex_ReadByte(address + 1), 1}}
 		instructionSize = 6
 		offset = IEex_ReadDword(address + 2)
 	end
@@ -1740,7 +1675,7 @@ function IEex_HookJumpOnFail(address, restoreSize, assembly)
 		local bytes = {}
 		local limit = startAddress + size - 1
 		for i = startAddress, limit, 1 do
-			table.insert(bytes, {IEex_ReadByte(i, 0), 1})
+			table.insert(bytes, {IEex_ReadByte(i), 1})
 		end
 		return bytes
 	end
@@ -1765,7 +1700,7 @@ function IEex_HookJumpOnFail(address, restoreSize, assembly)
 		[0xEB] = {{0xE9, 1}},
 	}
 
-	local instructionByte = IEex_ReadByte(address, 0)
+	local instructionByte = IEex_ReadByte(address)
 	local instructionBytes = {}
 	local instructionSize = nil
 	local offset = nil
@@ -1774,13 +1709,13 @@ function IEex_HookJumpOnFail(address, restoreSize, assembly)
 	if switchBytes then
 		instructionBytes = switchBytes
 		instructionSize = 2
-		offset = IEex_ReadSignedByte(address + 1, 0)
+		offset = IEex_ReadSignedByte(address + 1)
 	elseif instructionByte == 0xE9 then
 		instructionBytes = {{instructionByte, 1}}
 		instructionSize = 5
 		offset = IEex_ReadDword(address + 1)
 	else
-		instructionBytes = {{instructionByte, 1}, {IEex_ReadByte(address + 1, 0), 1}}
+		instructionBytes = {{instructionByte, 1}, {IEex_ReadByte(address + 1), 1}}
 		instructionSize = 6
 		offset = IEex_ReadDword(address + 2)
 	end
@@ -1817,7 +1752,7 @@ function IEex_HookJumpOnSuccess(address, restoreSize, assembly)
 		local bytes = {}
 		local limit = startAddress + size - 1
 		for i = startAddress, limit, 1 do
-			table.insert(bytes, {IEex_ReadByte(i, 0), 1})
+			table.insert(bytes, {IEex_ReadByte(i), 1})
 		end
 		return bytes
 	end
@@ -1842,7 +1777,7 @@ function IEex_HookJumpOnSuccess(address, restoreSize, assembly)
 		[0xEB] = {{0xE9, 1}},
 	}
 
-	local instructionByte = IEex_ReadByte(address, 0)
+	local instructionByte = IEex_ReadByte(address)
 	local instructionBytes = {}
 	local instructionSize = nil
 	local offset = nil
@@ -1851,13 +1786,13 @@ function IEex_HookJumpOnSuccess(address, restoreSize, assembly)
 	if switchBytes then
 		instructionBytes = switchBytes
 		instructionSize = 2
-		offset = IEex_ReadSignedByte(address + 1, 0)
+		offset = IEex_ReadSignedByte(address + 1)
 	elseif instructionByte == 0xE9 then
 		instructionBytes = {{instructionByte, 1}}
 		instructionSize = 5
 		offset = IEex_ReadDword(address + 1)
 	else
-		instructionBytes = {{instructionByte, 1}, {IEex_ReadByte(address + 1, 0), 1}}
+		instructionBytes = {{instructionByte, 1}, {IEex_ReadByte(address + 1), 1}}
 		instructionSize = 6
 		offset = IEex_ReadDword(address + 2)
 	end
@@ -1896,7 +1831,7 @@ function IEex_HookJumpAutoFail(address, restoreSize, assembly)
 		local bytes = {}
 		local limit = startAddress + size - 1
 		for i = startAddress, limit, 1 do
-			table.insert(bytes, {IEex_ReadByte(i, 0), 1})
+			table.insert(bytes, {IEex_ReadByte(i), 1})
 		end
 		return bytes
 	end
@@ -1921,14 +1856,14 @@ function IEex_HookJumpAutoFail(address, restoreSize, assembly)
 		[0xEB] = {{0xE9, 1}},
 	}
 
-	local instructionByte = IEex_ReadByte(address, 0)
+	local instructionByte = IEex_ReadByte(address)
 	local instructionSize = nil
 	local offset = nil
 
 	local switchBytes = byteToDwordJmp[instructionByte]
 	if switchBytes then
 		instructionSize = 2
-		offset = IEex_ReadByte(address + 1, 0)
+		offset = IEex_ReadByte(address + 1)
 	elseif instructionByte == 0xE9 then
 		instructionSize = 5
 		offset = IEex_ReadDword(address + 1)
@@ -2597,6 +2532,9 @@ end
 function IEex_Helper_InformThreadWatcherOfDynamicMemory(base, size)
 	table.insert(IEex_PendingDynamicAllocationInforms, {base, size})
 end
+
+-- Adapt InfinityLoader to mimic IEexLoader
+dofile("override/IEex_InfinityLoaderAlias.lua")
 
 -- Assembly Macros
 dofile("override/IEex_Mac.lua")
