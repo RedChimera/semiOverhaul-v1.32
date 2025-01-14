@@ -1,0 +1,1 @@
+IWD2EE.exe > IEex.log 2>&1
