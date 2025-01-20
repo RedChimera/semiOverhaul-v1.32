@@ -87,10 +87,9 @@ end
 			!jb_dword >no_log
 
 			!push_eax
-			!push_byte 01
 			!push_dword ]], {IEex_WriteStringAuto("Stutter -> %d"), 4}, [[
-			!call >_SDL_Log
-			!add_esp_byte 0C
+			!call >IEex_Helper_logV
+			!add_esp_byte 08
 
 			@no_log
 			!pop_all_registers_iwd2

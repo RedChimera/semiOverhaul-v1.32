@@ -38,6 +38,3 @@ IEex_DefineAssemblyLabel("_luaL_openlibs", IEex_Label("Hardcoded_luaL_openlibs")
 IEex_DefineAssemblyLabel("_free", IEex_Label("Hardcoded_free"))
 IEex_DefineAssemblyLabel("_malloc", IEex_Label("Hardcoded_malloc"))
 IEex_DefineAssemblyLabel("__ftol2_sse", IEex_GetProcAddress("msvcrt.dll", "_ftol2_sse"))
-
--- IEex_DefineAssemblyLabel("_SDL_Log", IEex_Label(""))
--- IEex_DefineAssemblyLabel("_SDL_LogV", IEex_Label(""))

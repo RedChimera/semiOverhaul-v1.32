@@ -6,9 +6,6 @@ function IEex_Extern_SetupAsyncState(asyncSharedMemory)
 	-- Init common state
 	dofile("override/IEex_Common_State.lua")
 
-	-- Async thread should still be able to print to console/log
-	IEex_ExposeToLua(IEex_Label("_l_log_print"), "print")
-
 	-- Expose standard IEex functions to the Async state from the restored labels
 	IEex_ExposeToLua(IEex_Label("IEex_Call"), "IEex_Call")
 	IEex_ExposeToLua(IEex_Label("IEex_ClientToScreenLua"), "IEex_ClientToScreen")
