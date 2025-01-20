@@ -229,7 +229,7 @@ end
 
 function IEex_TracebackPrint(prefix, bodyPrefix, message, levelMod)
 	local traceback = debug.traceback(prefix.." ["..IEex_GetMilliseconds().."] "..message, 2 + (levelMod or 0))
-	traceback = traceback:gsub("\t", "    "):gsub("\n", "\nINFO: "..bodyPrefix.." ")
+	traceback = traceback:gsub("\t", "    "):gsub("\n", "\nLPRINT: "..bodyPrefix.." ")
 	print(traceback)
 end
 
@@ -446,22 +446,22 @@ function IEex_RoundUp(numToRound, multiple)
 end
 
 function IEex_AlphanumericConvert(s)
-	local res, dot = "", ""
-	for n, m, c in tostring(s):gmatch"(0*(%d*))(.?)" do
-		if n == "" then
-			dot, c = "", dot..c
+	local result, lastPeriod = "", ""
+	for digits, nonZeroDigits, anythingChar in tostring(s):gmatch("(0*(%d*))(.?)") do
+		if digits == "" then
+			lastPeriod, anythingChar = "", lastPeriod..anythingChar
 		else
-			res = res..(dot == "" and ("%03d%s"):format(#m, m) or "."..n)
-			dot, c = c:match"(%.?)(.*)"
+			result = result..(lastPeriod == "" and ("%03d%s"):format(#nonZeroDigits, nonZeroDigits) or "."..digits)
+			lastPeriod, anythingChar = anythingChar:match("(%.?)(.*)")
 		end
-		res = res..c:gsub(".", "\0%0")
+		result = result..anythingChar:gsub(".", "\0%0")
 	end
-	return res
+	return result
 end
 
 function IEex_AlphanumericCompare(a, b)
 	local ca, cb = IEex_AlphanumericConvert(a), IEex_AlphanumericConvert(b)
-	return ca < cb or ca == cb and a < b
+	return ca < cb or (ca == cb and a < b)
 end
 
 function IEex_GetOrCreate(t, k, default)
@@ -484,6 +484,10 @@ function IEex_IterateMapAsSorted(map, sortFunc, func)
 	for i, v in ipairs(t) do
 		func(i, v[1], v[2])
 	end
+end
+
+function IEex_AlphanumericSortFunc(a, b)
+	return IEex_AlphanumericCompare(a[1]:lower(), b[1]:lower())
 end
 
 function IEex_PrettyPrintHeader(str, indent)

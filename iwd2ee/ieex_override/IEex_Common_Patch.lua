@@ -8,9 +8,12 @@
 	local mainStatus, mainError = xpcall(function()
 
 		print("")
-		for label, address in pairs(IEex_GlobalAssemblyLabels) do
-			print(label..": "..IEex_ToHex(address))
-		end
+		IEex_IterateMapAsSorted(IEex_GlobalAssemblyLabels,
+			IEex_AlphanumericSortFunc,
+			function(_, label, address)
+				print(label..": "..IEex_ToHex(address))
+			end
+		)
 		print("")
 
 		IEex_InitialMemory = IEex_Malloc(0x1000) -- TODO: Can this allocate memory too far away?

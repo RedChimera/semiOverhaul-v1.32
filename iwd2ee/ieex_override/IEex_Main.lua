@@ -29,6 +29,7 @@
 		IEex_Helper_InitAddresses(IEex_Helper_Addresses)
 
 		print("IEex startup completed successfully!")
+		print("")
 
 	end, debug.traceback)
 

@@ -1,6 +1,6 @@
 
 IEex_Debug_CompressTime = false
-IEex_Debug_EnableThreadWatcher = true
+IEex_Debug_EnableThreadWatcher = false
 IEex_Debug_ForceTracePatches = false
 IEex_Debug_LogButtonInvalidations = false
 IEex_Debug_LogPanelInvalidations = false
